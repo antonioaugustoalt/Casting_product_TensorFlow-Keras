@@ -11,15 +11,15 @@ Na segunda etapa, foi desenvolvido um classificador utilizando uma Rede Neural C
 * **OK**
 * **Defeituosa**
 
-O projeto também utiliza Data Augmentation para aumentar a variedade das imagens utilizadas no treinamento e reduzir a dependência do modelo em condições específicas de posição, zoom e iluminação.
+Também foi utilizado Data Augmentation para simular pequenas variações de posição, zoom e iluminação durante o treinamento.
 
 ---
 
-## 2. Dataset
+# 2. Dataset
 
 Foi utilizado o dataset **Casting Product Image Data for Quality Inspection**, composto por imagens de peças metálicas destinadas à inspeção de qualidade.
 
-Neste projeto, as imagens foram organizadas em duas classes:
+As imagens foram organizadas em duas classes:
 
 ```text
 def_front/
@@ -32,15 +32,15 @@ ok_front/
 O conjunto utilizado possui:
 
 * **1.300 imagens**
+* **781 imagens defeituosas**
+* **519 imagens OK**
 * **2 classes**
-* Aproximadamente **781 imagens defeituosas**
-* Aproximadamente **519 imagens OK**
 
 As imagens foram carregadas automaticamente utilizando `image_dataset_from_directory()`.
 
 ---
 
-## 3. Estrutura do Projeto
+# 3. Estrutura do Projeto
 
 ```text
 projeto_tensor_keras/
@@ -51,8 +51,20 @@ projeto_tensor_keras/
 ├── ok_front/
 │   └── imagens de peças OK
 │
-├── main.ipynb
+├── assets1/
+│   ├── accuracy.png
+│   ├── augmentation.png
+│   ├── blur1_thereshold1.png
+│   ├── blur_thereshold.png
+│   ├── canny_dilatacao.png
+│   ├── canny_erosao.png
+│   ├── gray_thereshold_canny.png
+│   ├── loss.png
+│   ├── rgb1_gray1_blur1.png
+│   └── rgb_gray_blur.png
+│
 ├── funcoes.py
+├── main.ipynb
 ├── requirements.txt
 └── README.md
 ```
@@ -68,47 +80,41 @@ O arquivo `main.ipynb` contém o desenvolvimento principal do projeto, incluindo
 As imagens foram convertidas para escala de cinza utilizando o OpenCV:
 
 ```python
-imagem_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 ```
 
-As imagens utilizadas no dataset já apresentavam aparência monocromática. Dessa forma, a conversão para Grayscale não produziu uma alteração visual significativa, porém a operação foi realizada para garantir que as imagens utilizadas no processamento clássico fossem representadas explicitamente por uma única matriz de intensidade.
+As imagens selecionadas do dataset já apresentavam aparência monocromática. Dessa forma, a conversão para Grayscale não produziu uma alteração visual significativa, porém a operação foi realizada para garantir que o processamento trabalhasse explicitamente com uma única matriz de intensidade.
 
-A escala de intensidade utilizada possui valores entre:
+A representação utiliza valores de intensidade entre:
 
 ```text
 0   → preto
 255 → branco
 ```
 
-A conversão foi importante para preparar as imagens para as etapas posteriores de análise de características.
-
----
-
 ## 4.2 Gaussian Blur
 
-Após a conversão para escala de cinza, foi aplicado o filtro Gaussian Blur:
+Após a conversão para escala de cinza, foi aplicado o Gaussian Blur:
 
 ```python
-imagem_blur = cv2.GaussianBlur(
-    imagem_gray,
-    (5, 5),
-    0
-)
+img_blur = cv2.GaussianBlur(img_gray, (5, 5), 0)
 ```
 
-O objetivo do filtro foi suavizar pequenas variações e ruídos presentes na imagem antes das etapas de detecção de características.
+O objetivo foi suavizar pequenas variações e possíveis ruídos da imagem antes das etapas de extração de características.
 
 Foi utilizado um kernel de `5 × 5` e sigma automático.
 
-O efeito visual foi relativamente discreto com esse tamanho de kernel, mas suficiente para realizar uma suavização sem remover excessivamente as características estruturais da peça.
+### Resultado visual
+
+![Grayscale e Gaussian Blur](assets1/rgb_gray_blur.png)
 
 ---
 
 # 5. Sprint 3 — Destaque de Características
 
-Nesta etapa foram utilizadas técnicas para destacar visualmente possíveis regiões defeituosas.
+Nesta etapa foram aplicadas técnicas para destacar visualmente as regiões associadas aos defeitos.
 
-O pipeline desenvolvido foi:
+O pipeline utilizado foi:
 
 ```text
 Imagem Original
@@ -124,33 +130,31 @@ Canny
 Operações Morfológicas
 ```
 
----
-
 ## 5.1 Threshold
 
 Foi aplicada uma limiarização utilizando:
 
 ```python
-_, imagem_thresh = cv2.threshold(
-    imagem_blur,
+img_thresh = cv2.threshold(
+    img_blur,
     80,
     255,
     cv2.THRESH_BINARY
 )
 ```
 
-O threshold utilizado foi definido empiricamente durante a análise exploratória.
+O valor `80` foi definido empiricamente durante a análise exploratória.
 
-O valor `80` apresentou um resultado satisfatório para as imagens analisadas, embora não tenha sido o valor perfeito para todas as imagens.
+Esse valor apresentou resultado satisfatório nas imagens analisadas, embora não tenha sido necessariamente o valor ideal para todas as imagens.
 
-A operação converte os valores de intensidade em uma representação binária:
+A operação pode ser representada como:
 
 ```text
 intensidade < 80  → 0
 intensidade ≥ 80  → 255
 ```
 
-Essa transformação permitiu separar visualmente diferentes regiões da superfície da peça.
+Dessa forma, regiões com diferentes níveis de intensidade podem ser visualmente separadas.
 
 ---
 
@@ -159,44 +163,44 @@ Essa transformação permitiu separar visualmente diferentes regiões da superf�
 Foi utilizado o algoritmo Canny:
 
 ```python
-imagem_canny = cv2.Canny(
-    imagem_blur,
-    50,
-    150
-)
+img_canny = cv2.Canny(img_blur, 50, 150)
 ```
 
-O Canny foi utilizado para identificar mudanças bruscas de intensidade na imagem.
+O Canny identifica mudanças bruscas de intensidade e, consequentemente, evidencia bordas presentes na imagem.
 
-Nas imagens com acabamento mais uniforme, o algoritmo conseguiu destacar principalmente o defeito localizado na região central da peça.
+Nas peças com acabamento mais uniforme, o algoritmo destacou principalmente o defeito localizado na região central.
 
-Em imagens com acabamento superficial mais irregular, também foram identificadas estruturas adicionais nas bordas da peça. Isso ocorre porque o Canny detecta transições de intensidade e não possui conhecimento sobre o que representa necessariamente um defeito.
+Nas peças com acabamento mais irregular, também foram observadas bordas adicionais nas regiões externas da peça. Isso ocorre porque o Canny detecta transições de intensidade e não diferencia automaticamente entre um defeito e uma irregularidade de acabamento.
 
-Dessa forma, irregularidades de acabamento também podem ser interpretadas como bordas.
+### Resultado visual
+
+![Threshold e Canny](assets1/gray_thereshold_canny.png)
 
 ---
 
 ## 5.3 Erosão
 
-A erosão foi testada experimentalmente utilizando diferentes tamanhos de kernel.
-
-Exemplo:
+A erosão foi avaliada experimentalmente como operação morfológica:
 
 ```python
-kernel = np.ones((3, 3), np.uint8)
+kernel = np.ones((2, 2), np.uint8)
 
-imagem_erodida = cv2.erode(
-    imagem_canny,
+img_erosao = cv2.erode(
+    img_canny,
     kernel,
     iterations=1
 )
 ```
 
-Também foi avaliado um kernel menor.
+A operação tende a reduzir as regiões claras da imagem.
 
-Nos testes realizados, a erosão reduziu excessivamente as estruturas produzidas pelo Canny, chegando a praticamente eliminar as linhas detectadas.
+Nos testes realizados, a erosão reduziu excessivamente as linhas produzidas pelo Canny, chegando a praticamente eliminar algumas das estruturas detectadas.
 
-Por esse motivo, a erosão foi mantida no notebook para fins de demonstração e documentação da análise exploratória, mas não foi utilizada como parte do resultado final escolhido.
+Por esse motivo, a erosão foi mantida na análise para demonstrar o comportamento da técnica, mas **não foi escolhida para o resultado final do pipeline**.
+
+### Resultado visual
+
+![Erosão](assets1/canny_erosao.png)
 
 ---
 
@@ -207,26 +211,30 @@ A dilatação apresentou um resultado mais adequado:
 ```python
 kernel = np.ones((3, 3), np.uint8)
 
-imagem_dilatada = cv2.dilate(
-    imagem_canny,
+img_dilatada = cv2.dilate(
+    img_canny,
     kernel,
     iterations=1
 )
 ```
 
-A operação tornou as estruturas detectadas pelo Canny mais espessas e contínuas.
+A operação reforça as regiões claras detectadas pelo Canny, tornando algumas estruturas mais espessas e contínuas.
 
-Nas imagens analisadas, o defeito central tornou-se mais evidente e as bordas apresentaram estruturas mais contínuas.
+Nos testes realizados, o defeito central ficou mais evidente e as bordas ficaram visualmente mais contínuas.
 
-Dessa forma, a dilatação foi escolhida como a operação morfológica de maior interesse para a análise final.
+Por esse motivo, a dilatação foi utilizada como a operação morfológica de maior interesse na análise final.
+
+### Resultado visual
+
+![Dilatação](assets1/canny_dilatacao.png)
 
 ---
 
 # 6. Sprint 4 — Ingestão de Dados e Data Augmentation
 
-## 6.1 Ingestão do Dataset
+## 6.1 Ingestão automática do dataset
 
-O dataset completo foi carregado automaticamente utilizando:
+O dataset completo foi carregado utilizando:
 
 ```python
 tf.keras.utils.image_dataset_from_directory()
@@ -248,7 +256,7 @@ Resultado:
 └──   260 → Validação
 ```
 
-Foram utilizadas as seguintes configurações:
+Foram utilizadas as configurações:
 
 ```text
 image_size = (224, 224)
@@ -256,19 +264,17 @@ batch_size = 32
 seed = 42
 ```
 
-As imagens foram portanto padronizadas para:
+Assim, cada imagem entregue à CNN possui o formato:
 
 ```text
 224 × 224 × 3
 ```
 
-onde os três canais representam RGB.
-
 ---
 
 ## 6.2 Data Augmentation
 
-Foi utilizado Data Augmentation dinâmico com:
+Foi utilizado Data Augmentation dinâmico:
 
 ```python
 data_augmentation = tf.keras.Sequential([
@@ -278,25 +284,25 @@ data_augmentation = tf.keras.Sequential([
 ])
 ```
 
-As transformações utilizadas foram:
+Foram aplicadas três transformações:
 
 * **RandomRotation** — pequenas variações de rotação;
-* **RandomZoom** — pequenas variações de aproximação/afastamento;
-* **RandomBrightness** — variações de iluminação.
+* **RandomZoom** — pequenas variações de zoom;
+* **RandomBrightness** — variações de luminosidade.
 
-Essas transformações são aplicadas dinamicamente durante o treinamento.
+As imagens originais não são modificadas permanentemente no disco. As transformações são realizadas dinamicamente durante o treinamento.
 
-As imagens originais não são modificadas permanentemente no disco.
+O augmentation foi aplicado ao conjunto de treinamento, enquanto o conjunto de validação permaneceu sem essas transformações para representar melhor os dados originais.
 
-O objetivo é fazer com que a CNN observe diferentes versões da mesma peça e aprenda características mais gerais, reduzindo a dependência em condições específicas de captura.
+### Visualização das transformações
 
-O Data Augmentation foi aplicado ao conjunto de treinamento e não ao conjunto de validação.
+![Data Augmentation](assets1/augmentation.png)
 
 ---
 
-## 6.3 Otimização do Pipeline
+## 6.3 Otimização do pipeline
 
-Para melhorar o fluxo de dados durante o treinamento foram utilizados:
+Para melhorar o carregamento dos dados durante o treinamento foram utilizados `cache()` e `prefetch()`:
 
 ```python
 AUTOTUNE = tf.data.AUTOTUNE
@@ -310,9 +316,7 @@ val_ds = val_ds.cache().prefetch(
 )
 ```
 
-O `cache()` reduz operações repetidas de leitura e preparação dos dados.
-
-O `prefetch()` permite preparar novos lotes enquanto o modelo ainda processa o lote anterior.
+Esses recursos ajudam a reduzir operações repetidas de leitura e permitem preparar novos batches enquanto o modelo processa os anteriores.
 
 ---
 
@@ -320,18 +324,18 @@ O `prefetch()` permite preparar novos lotes enquanto o modelo ainda processa o l
 
 ## 7.1 Arquitetura
 
-Foi construída uma CNN utilizando a API `Sequential` do Keras.
+Foi construída uma CNN utilizando a API `Sequential` do TensorFlow/Keras.
 
-Arquitetura utilizada:
+A arquitetura utilizada foi:
 
 ```text
 Data Augmentation
         ↓
-Conv2D — 32 filtros — kernel 3×3 — ReLU
+Conv2D — 32 filtros — 3×3 — ReLU
         ↓
 MaxPooling2D — 2×2
         ↓
-Conv2D — 64 filtros — kernel 3×3 — ReLU
+Conv2D — 64 filtros — 3×3 — ReLU
         ↓
 MaxPooling2D — 2×2
         ↓
@@ -342,75 +346,102 @@ Dense — 64 neurônios — ReLU
 Dense — 1 neurônio — Sigmoid
 ```
 
-Código da arquitetura:
+Código principal:
 
 ```python
 model = tf.keras.Sequential([
     data_augmentation,
 
-    tf.keras.layers.Conv2D(
-        32,
-        (3, 3),
-        activation="relu"
-    ),
+    conv1,
+    pool1,
 
-    tf.keras.layers.MaxPooling2D(
-        (2, 2)
-    ),
+    conv2,
+    pool2,
 
-    tf.keras.layers.Conv2D(
-        64,
-        (3, 3),
-        activation="relu"
-    ),
+    flatten,
 
-    tf.keras.layers.MaxPooling2D(
-        (2, 2)
-    ),
-
-    tf.keras.layers.Flatten(),
-
-    tf.keras.layers.Dense(
-        64,
-        activation="relu"
-    ),
-
-    tf.keras.layers.Dense(
-        1,
-        activation="sigmoid"
-    )
+    dense1,
+    output
 ])
 ```
 
 ---
 
-## 7.2 Funcionamento das camadas
+## 7.2 Conv2D
 
-### Conv2D
+A primeira camada convolucional utiliza 32 filtros com kernel `3×3`:
 
-As camadas convolucionais são responsáveis pela extração de características espaciais das imagens.
+```python
+tf.keras.layers.Conv2D(
+    32,
+    (3, 3),
+    activation="relu"
+)
+```
 
-A primeira camada utiliza 32 filtros e a segunda utiliza 64 filtros.
+A segunda utiliza 64 filtros:
 
-Esses filtros aprendem automaticamente diferentes padrões presentes nas imagens durante o treinamento.
+```python
+tf.keras.layers.Conv2D(
+    64,
+    (3, 3),
+    activation="relu"
+)
+```
 
-### MaxPooling2D
+As camadas convolucionais são responsáveis por aprender características espaciais das imagens.
 
-As camadas de pooling reduzem a dimensão espacial das características extraídas, preservando as respostas mais relevantes.
+---
 
-### Flatten
+## 7.3 MaxPooling2D
 
-A camada `Flatten` transforma os mapas de características tridimensionais em um vetor unidimensional, preparando os dados para as camadas densas.
+Foram utilizadas duas camadas:
 
-### Dense
+```python
+tf.keras.layers.MaxPooling2D(
+    (2, 2)
+)
+```
 
-A camada intermediária possui 64 neurônios e combina as características extraídas pela parte convolucional.
+O MaxPooling reduz a dimensão espacial das características extraídas, preservando as ativações mais relevantes.
 
-### Sigmoid
+---
 
-A camada final possui um único neurônio com função de ativação `sigmoid`, adequada para a classificação binária.
+## 7.4 Flatten
 
-As classes utilizadas são:
+A camada:
+
+```python
+tf.keras.layers.Flatten()
+```
+
+transforma os mapas de características tridimensionais em um vetor unidimensional, permitindo a conexão com as camadas densas.
+
+---
+
+## 7.5 Camadas Dense
+
+Foi utilizada uma camada intermediária:
+
+```python
+tf.keras.layers.Dense(
+    64,
+    activation="relu"
+)
+```
+
+A camada final possui um único neurônio:
+
+```python
+tf.keras.layers.Dense(
+    1,
+    activation="sigmoid"
+)
+```
+
+Como o problema possui duas classes, a saída sigmoid produz um valor entre 0 e 1 para a classificação binária.
+
+A correspondência das classes é:
 
 ```text
 0 → def_front
@@ -419,7 +450,7 @@ As classes utilizadas são:
 
 ---
 
-## 7.3 Parâmetros do Modelo
+## 7.6 Parâmetros do modelo
 
 O modelo apresentou:
 
@@ -428,7 +459,7 @@ Total de parâmetros: 11.963.457
 Parâmetros treináveis: 11.963.457
 ```
 
-Grande parte dos parâmetros está concentrada na camada `Dense` após o `Flatten`.
+A maior parte dos parâmetros está concentrada na camada `Dense` após o `Flatten`.
 
 ---
 
@@ -450,11 +481,11 @@ Foi utilizado o **Adam**, conforme solicitado pela tarefa.
 
 ### Loss
 
-Foi utilizada a **Binary Crossentropy**, adequada ao problema de classificação binária.
+Foi utilizada a **Binary Crossentropy**, adequada para classificação binária com saída sigmoid.
 
 ### Métrica
 
-Foi utilizada a **Accuracy** para acompanhar a proporção de classificações corretas durante o treinamento.
+Foi utilizada **Accuracy** para acompanhar a proporção de classificações corretas.
 
 ---
 
@@ -470,7 +501,7 @@ history = model.fit(
 )
 ```
 
-Foram acompanhadas as seguintes métricas:
+Foram acompanhadas:
 
 ```text
 accuracy
@@ -481,86 +512,116 @@ val_loss
 
 ---
 
-# 10. Resultados
+# 10. Resultados e Auditoria
 
-## 10.1 Melhor resultado de validação
+## 10.1 Loss
 
-O melhor resultado observado foi na **Epoch 18**:
-
-```text
-Val Accuracy: 84,23%
-Val Loss:     0,3607
-```
-
-Os valores finais na Epoch 20 foram:
-
-```text
-Val Accuracy: 83,08%
-Val Loss:     0,3660
-```
-
-Resultados:
-
-| Métrica      | Melhor resultado | Última Epoch |
-| ------------ | ---------------: | -----------: |
-| Val Accuracy |       **84,23%** |       83,08% |
-| Val Loss     |       **0,3607** |       0,3660 |
-
----
-
-# 11. Auditoria de Overfitting
-
-Foram analisadas as curvas de:
-
-* Loss de treinamento;
-* Loss de validação;
-* Accuracy de treinamento;
-* Accuracy de validação.
-
-A Loss de treinamento apresentou redução geral de aproximadamente:
+A Loss de treinamento apresentou uma redução geral de aproximadamente:
 
 ```text
 0,96 → 0,41
 ```
 
-A Loss de validação apresentou redução geral de aproximadamente:
+A Loss de validação apresentou uma redução geral de aproximadamente:
 
 ```text
 0,63 → 0,37
 ```
 
-As curvas apresentaram algumas oscilações ao longo do treinamento, incluindo uma elevação temporária da `val_loss` na Epoch 17.
+Durante o treinamento ocorreram algumas oscilações. A maior delas ocorreu na Epoch 17, quando a `val_loss` subiu temporariamente para aproximadamente `0,78`, mas caiu novamente para aproximadamente `0,36` na Epoch 18.
 
-Entretanto, essa elevação foi seguida por recuperação na Epoch 18:
+Não foi observada uma separação progressiva e persistente entre `loss` e `val_loss`.
+
+### Gráfico de Loss
+
+![Loss durante o treinamento](assets1/loss.png)
+
+---
+
+## 10.2 Accuracy
+
+A Accuracy de treinamento evoluiu aproximadamente de:
 
 ```text
-Epoch 17 → val_loss ≈ 0,78
-Epoch 18 → val_loss ≈ 0,36
+60,1% → 79,1%
 ```
 
-Não foi observada uma divergência persistente na qual a Loss de treinamento continuasse diminuindo enquanto a Loss de validação aumentasse continuamente.
+Enquanto a Accuracy de validação evoluiu aproximadamente de:
 
-Dessa forma, considerando as 20 épocas analisadas, **não foi identificado um quadro claro e persistente de overfitting**.
+```text
+63,9% → 83,1%
+```
 
-O comportamento geral foi considerado predominantemente saudável, embora o modelo ainda apresente espaço para melhoria.
+O melhor resultado de validação foi obtido na Epoch 18.
+
+### Gráfico de Accuracy
+
+![Accuracy durante o treinamento](assets1/accuracy.png)
+
+---
+
+## 10.3 Melhor resultado
+
+O melhor resultado de validação foi:
+
+```text
+Epoch 18
+
+Val Accuracy: 84,23%
+Val Loss:     0,3607
+```
+
+Na última época:
+
+```text
+Epoch 20
+
+Val Accuracy: 83,08%
+Val Loss:     0,3660
+```
+
+| Métrica          | Melhor resultado | Última Epoch |
+| ---------------- | ---------------: | -----------: |
+| **Val Accuracy** |       **84,23%** |       83,08% |
+| **Val Loss**     |       **0,3607** |       0,3660 |
+
+---
+
+# 11. Análise de Overfitting
+
+O comportamento das curvas foi analisado comparando treinamento e validação.
+
+Não foi observada uma situação de overfitting persistente na qual:
+
+```text
+Loss de treino ↓ continuamente
+
+enquanto
+
+Loss de validação ↑ continuamente
+```
+
+As duas perdas apresentaram uma tendência geral de redução, embora com algumas oscilações ao longo das épocas.
+
+A queda temporária da `val_loss` na Epoch 17 foi seguida por recuperação na Epoch 18, indicando que não se tratou de uma deterioração progressiva da generalização.
+
+Dessa forma, considerando as 20 épocas analisadas, o treinamento apresentou comportamento **predominantemente saudável**, sem evidência clara de overfitting persistente.
 
 ---
 
 # 12. Conclusão
 
-O projeto demonstrou a integração entre técnicas clássicas de Visão Computacional e aprendizado profundo para inspeção de peças metálicas.
+O projeto demonstrou a integração entre técnicas clássicas de Visão Computacional e aprendizado profundo para inspeção automatizada de peças metálicas.
 
-Na análise exploratória, as técnicas de Grayscale, Gaussian Blur, Threshold e Canny permitiram visualizar características e defeitos presentes nas peças. As operações morfológicas também foram avaliadas, com a dilatação apresentando melhor resultado que a erosão para as imagens analisadas.
+Na análise exploratória, as técnicas de Grayscale, Gaussian Blur, Threshold e Canny permitiram destacar características visuais relacionadas aos defeitos. Também foram testadas operações morfológicas, com a dilatação apresentando resultado mais adequado que a erosão para as imagens analisadas.
 
-Na etapa de aprendizado profundo, o dataset foi carregado automaticamente, dividido em treinamento e validação e submetido a Data Augmentation com variações geométricas e de iluminação.
+Na etapa de aprendizado profundo, o dataset foi carregado automaticamente e dividido entre treinamento e validação. Foi utilizado Data Augmentation com variações geométricas e de luminosidade para aumentar a variedade dos dados de treinamento.
 
-Por fim, foi desenvolvida uma CNN utilizando `Conv2D`, `MaxPooling2D`, `Flatten` e `Dense`, treinada com Adam e Binary Crossentropy.
+A CNN foi construída utilizando `Conv2D`, `MaxPooling2D`, `Flatten` e `Dense`, com Adam como otimizador e Binary Crossentropy como função de perda.
 
-O melhor resultado obtido na validação foi de aproximadamente **84,23% de acurácia**, com `val_loss` de **0,3607** na Epoch 18.
+O melhor resultado obtido no conjunto de validação foi de **84,23% de acurácia**, com `val_loss` de **0,3607**, alcançado na Epoch 18.
 
-A análise das curvas de treinamento não indicou overfitting persistente nas 20 épocas executadas.
-
-O projeto demonstra, portanto, um pipeline completo que parte da análise clássica das imagens e chega à classificação automatizada das peças utilizando aprendizado profundo.
+A análise dos gráficos de Loss e Accuracy não apresentou sinais de overfitting persistente durante as 20 épocas avaliadas.
 
 ---
 
@@ -621,11 +682,10 @@ O projeto demonstra, portanto, um pipeline completo que parte da análise cláss
 
 ### Sprint 6 — Auditoria e Entrega
 
-* Gráfico de Loss;
-* Gráfico de Accuracy;
+* Gráficos de Loss e Accuracy;
 * Análise de Overfitting;
 * Documentação;
-* Preparação do vídeo técnico.
+* Preparação da apresentação em vídeo.
 
 ---
 
@@ -635,7 +695,7 @@ O projeto demonstra, portanto, um pipeline completo que parte da análise cláss
 main.ipynb
 ```
 
-Notebook contendo todo o desenvolvimento do projeto.
+Notebook contendo o desenvolvimento completo do projeto.
 
 ```text
 funcoes.py
@@ -647,4 +707,10 @@ Arquivo destinado às funções auxiliares utilizadas no projeto.
 requirements.txt
 ```
 
-Lista de dependências necessárias para execução do projeto.
+Lista das dependências necessárias para executar o projeto.
+
+```text
+assets1/
+```
+
+Pasta contendo os resultados visuais utilizados na documentação, incluindo as etapas de processamento OpenCV, Data Augmentation e os gráficos de treinamento.
